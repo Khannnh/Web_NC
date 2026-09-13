@@ -13,6 +13,6 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["Buoi*/**/*.ts", "*.ts"],
+  "include": ["Buoi*/**/*.ts", "*.ts" , "Buoi*/**/*.tsx", "*.tsx"],//thêm cả tsx 
   "exclude": ["node_modules", "dist"]
 }

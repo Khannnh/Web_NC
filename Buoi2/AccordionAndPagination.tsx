@@ -1,16 +1,16 @@
 import React, { createContext, useContext, useState, useMemo, ReactNode } from "react";
-
 // ============================================================================
-// PHẦN 1: CUSTOM HOOK usePagination<T> (Generic Type)
+// 1. CUSTOM HOOK: usePagination<T>
+// Yêu cầu: Nhận vào data: T[], itemsPerPage; trả về page hiện tại, total, next/prev/goToPage
 // ============================================================================
 
-interface UsePaginationProps<T> {
+export interface UsePaginationProps<T> {
   data: T[];
   itemsPerPage: number;
   initialPage?: number;
 }
 
-interface UsePaginationReturn<T> {
+export interface UsePaginationReturn<T> {
   currentPage: number;
   totalPages: number;
   currentData: T[];
@@ -28,79 +28,94 @@ export function usePagination<T>({
 }: UsePaginationProps<T>): UsePaginationReturn<T> {
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
 
-  // Tính tổng số trang (tối thiểu là 1 trang)
+  // Tính tổng số trang (ít nhất là 1 trang)
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(data.length / itemsPerPage));
   }, [data.length, itemsPerPage]);
 
-  // Điều chỉnh trang hiện tại nếu dữ liệu thay đổi khiến trang vượt ngưỡng
-  const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+  // Đảm bảo trang hiện tại luôn nằm trong khoảng [1, totalPages]
+  const validPage = Math.min(Math.max(currentPage, 1), totalPages);
 
-  // Cắt mảng dữ liệu cho trang hiện tại
+  // Cắt mảng dữ liệu hiển thị cho trang hiện tại
   const currentData = useMemo(() => {
-    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+    const startIndex = (validPage - 1) * itemsPerPage;
     return data.slice(startIndex, startIndex + itemsPerPage);
-  }, [data, safeCurrentPage, itemsPerPage]);
+  }, [data, validPage, itemsPerPage]);
 
   const goToPage = (page: number) => {
-    const pageNumber = Math.max(1, Math.min(page, totalPages));
-    setCurrentPage(pageNumber);
+    const targetPage = Math.max(1, Math.min(page, totalPages));
+    setCurrentPage(targetPage);
   };
 
   const nextPage = () => {
-    if (safeCurrentPage < totalPages) {
+    if (validPage < totalPages) {
       setCurrentPage((prev) => prev + 1);
     }
   };
 
   const prevPage = () => {
-    if (safeCurrentPage > 1) {
+    if (validPage > 1) {
       setCurrentPage((prev) => prev - 1);
     }
   };
 
   return {
-    currentPage: safeCurrentPage,
+    currentPage: validPage,
     totalPages,
     currentData,
     nextPage,
     prevPage,
     goToPage,
-    canNextPage: safeCurrentPage < totalPages,
-    canPrevPage: safeCurrentPage > 1,
+    canNextPage: validPage < totalPages,
+    canPrevPage: validPage > 1,
   };
 }
-
 // ============================================================================
-// PHẦN 2: COMPOUND COMPONENT ACCORDION (Context API)
+// 2. COMPOUND COMPONENT: Accordion
+// Yêu cầu: Nhiều panel, chỉ mở 1 panel tại 1 thời điểm, dùng Context API tương tự Tabs
 // ============================================================================
 
-// 1. Khởi tạo Context cho Accordion
+// Context chính cho Accordion cha
 interface AccordionContextType {
   activeId: string | null;
   toggleItem: (id: string) => void;
 }
 
-const AccordionContext = createContext<AccordionContextType | undefined>(undefined);
+const AccordionContext = createContext<AccordionContextType | null>(null);
 
-const useAccordionContext = () => {
+function useAccordionContext() {
   const context = useContext(AccordionContext);
   if (!context) {
-    throw new Error("Accordion compound components must be rendered inside an Accordion parent");
+    throw new Error("Các component con của Accordion phải nằm trong thẻ <Accordion>");
   }
   return context;
-};
+}
 
-// 2. Component Accordion chính (Container)
+// Context cho từng Accordion.Item
+interface AccordionItemContextType {
+  id: string;
+}
+
+const AccordionItemContext = createContext<AccordionItemContextType | null>(null);
+
+function useAccordionItemContext() {
+  const context = useContext(AccordionItemContext);
+  if (!context) {
+    throw new Error("<Accordion.Header> và <Accordion.Body> phải nằm trong <Accordion.Item>");
+  }
+  return context;
+}
+
+// Component cha: Accordion
 interface AccordionProps {
   children: ReactNode;
   defaultActiveId?: string | null;
 }
 
-export const Accordion = ({ children, defaultActiveId = null }: AccordionProps) => {
+export function Accordion({ children, defaultActiveId = null }: AccordionProps) {
   const [activeId, setActiveId] = useState<string | null>(defaultActiveId);
 
-  // Logic: Nếu bấm vào panel đang mở thì đóng lại, bấm cái khác thì mở cái mới và đóng cái cũ
+  // Logic: Nếu click vào panel đang mở thì đóng, click panel khác thì mở nó và tự đóng panel cũ
   const toggleItem = (id: string) => {
     setActiveId((prevId) => (prevId === id ? null : id));
   };
@@ -112,117 +127,100 @@ export const Accordion = ({ children, defaultActiveId = null }: AccordionProps) 
       </div>
     </AccordionContext.Provider>
   );
-};
-
-// Context phụ cho từng AccordionItem
-interface AccordionItemContextType {
-  id: string;
 }
-const AccordionItemContext = createContext<AccordionItemContextType | undefined>(undefined);
 
-// 3. Component Accordion.Item
+// Component con: Accordion.Item
 interface AccordionItemProps {
   id: string;
   children: ReactNode;
 }
 
-const AccordionItem = ({ id, children }: AccordionItemProps) => {
+function AccordionItem({ id, children }: AccordionItemProps) {
   return (
     <AccordionItemContext.Provider value={{ id }}>
       <div style={{ borderBottom: "1px solid #e2e8f0" }}>{children}</div>
     </AccordionItemContext.Provider>
   );
-};
+}
 
-// 4. Component Accordion.Header
+// Component con: Accordion.Header
 interface AccordionHeaderProps {
   children: ReactNode;
 }
 
-const AccordionHeader = ({ children }: AccordionHeaderProps) => {
+function AccordionHeader({ children }: AccordionHeaderProps) {
   const { activeId, toggleItem } = useAccordionContext();
-  const itemContext = useContext(AccordionItemContext);
-
-  if (!itemContext) {
-    throw new Error("Accordion.Header must be used within an Accordion.Item");
-  }
-
-  const isOpen = activeId === itemContext.id;
+  const { id } = useAccordionItemContext();
+  const isOpen = activeId === id;
 
   return (
     <button
-      onClick={() => toggleItem(itemContext.id)}
+      type="button"
+      onClick={() => toggleItem(id)}
       style={{
         width: "100%",
-        textAlign: "left",
-        padding: "16px",
-        background: isOpen ? "#f8fafc" : "#fff",
-        border: "none",
-        cursor: "pointer",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        padding: "14px 18px",
+        background: isOpen ? "#f8fafc" : "#ffffff",
+        border: "none",
+        cursor: "pointer",
         fontWeight: 600,
         fontSize: "15px",
+        textAlign: "left",
       }}
     >
       <span>{children}</span>
       <span>{isOpen ? "▲" : "▼"}</span>
     </button>
   );
-};
+}
 
-// 5. Component Accordion.Body
+// Component con: Accordion.Body
 interface AccordionBodyProps {
   children: ReactNode;
 }
 
-const AccordionBody = ({ children }: AccordionBodyProps) => {
+function AccordionBody({ children }: AccordionBodyProps) {
   const { activeId } = useAccordionContext();
-  const itemContext = useContext(AccordionItemContext);
+  const { id } = useAccordionItemContext();
 
-  if (!itemContext) {
-    throw new Error("Accordion.Body must be used within an Accordion.Item");
-  }
-
-  const isOpen = activeId === itemContext.id;
-
-  if (!isOpen) return null;
+  if (activeId !== id) return null;
 
   return (
-    <div style={{ padding: "16px", backgroundColor: "#fff", color: "#475569", lineHeight: 1.6 }}>
+    <div style={{ padding: "16px 18px", backgroundColor: "#fff", color: "#475569", lineHeight: 1.5 }}>
       {children}
     </div>
   );
-};
+}
 
-// Gắn các sub-component vào Accordion
+// Đóng gói static property theo chuẩn Compound Component
 Accordion.Item = AccordionItem;
 Accordion.Header = AccordionHeader;
 Accordion.Body = AccordionBody;
 
 // ============================================================================
-// PHẦN 3: DEMO KẾT HỢP ACCORDION & USEPAGINATION CHO DANH SÁCH SẢN PHẨM
+// 3. DEMO: KẾT HỢP ACCORDION & USEPAGINATION VỚI DANH SÁCH SẢN PHẨM
 // ============================================================================
 
 interface Product {
   id: string;
   name: string;
   price: number;
-  description: string;
   category: string;
+  description: string;
 }
 
-const MOCK_PRODUCTS: Product[] = [
-  { id: "P1", name: "Bàn phím cơ Custom", price: 1500000, description: "Switch Gateron Yellow, gõ êm, hotswap 5 pin.", category: "Phụ kiện" },
-  { id: "P2", name: "Chuột Gaming Không Dây", price: 950000, description: "Cảm biến quang học 16000 DPI, pin 70 tiếng liên tục.", category: "Phụ kiện" },
-  { id: "P3", name: "Tai nghe chống ồn", price: 2300000, description: "Chống ồn chủ động ANC, kết nối bluetooth 5.3 đa điểm.", category: "Âm thanh" },
-  { id: "P4", name: "Màn hình 27 inch 2K", price: 5400000, description: "Tấm nền IPS 165Hz, chuẩn màu 99% sRGB làm đồ hoạ.", category: "Màn hình" },
-  { id: "P5", name: "Giá đỡ Laptop nhôm", price: 320000, description: "Nhôm nguyên khối cắt CNC, tản nhiệt tốt, nâng hạ 6 nấc.", category: "Phụ kiện" },
+const SAMPLE_PRODUCTS: Product[] = [
+  { id: "p1", name: "Bàn phím cơ Aula F75", price: 1250000, category: "Bàn phím", description: "Mạch xuôi, gõ êm, pin 4000mAh, kết nối 3 mode linh hoạt." },
+  { id: "p2", name: "Chuột Dragonfly F1 Pro", price: 950000, category: "Chuột", description: "Trọng lượng siêu nhẹ 49g, mắt đọc PAW3395 chuẩn gaming." },
+  { id: "p3", name: "Màn hình ViewSonic 27 inch 2K", price: 4800000, category: "Màn hình", description: "Tấm nền Fast IPS, độ sáng 350 nits, chuẩn màu 99% sRGB." },
+  { id: "p4", name: "Tai nghe Moondrop Space Travel", price: 590000, category: "Tai nghe", description: "Chống ồn chủ động ANC, chất âm chi tiết trong tầm giá." },
+  { id: "p5", name: "Giá đỡ laptop hợp kim nhôm", price: 290000, category: "Phụ kiện", description: "Nhôm nguyên khối CNC chắc chắn, gấp gọn tiện lợi." },
 ];
 
-export const ProductListDemo = () => {
-  // Áp dụng Generic usePagination<Product>
+export function HomeworkBuoi2Demo() {
   const {
     currentPage,
     totalPages,
@@ -233,56 +231,70 @@ export const ProductListDemo = () => {
     canNextPage,
     canPrevPage,
   } = usePagination<Product>({
-    data: MOCK_PRODUCTS,
-    itemsPerPage: 2, // 2 sản phẩm mỗi trang
+    data: SAMPLE_PRODUCTS,
+    itemsPerPage: 2,
   });
 
   return (
-    <div style={{ maxWidth: "600px", margin: "24px auto", fontFamily: "sans-serif" }}>
-      <h2 style={{ marginBottom: "16px" }}>Danh Sách Sản Phẩm (Trang {currentPage}/{totalPages})</h2>
+    <div style={{ maxWidth: "600px", margin: "30px auto", fontFamily: "sans-serif" }}>
+      <h2 style={{ marginBottom: "16px", color: "#1e293b" }}>
+        Danh Sách Sản Phẩm (Trang {currentPage}/{totalPages})
+      </h2>
 
       {/* Accordion chỉ mở 1 panel tại 1 thời điểm */}
-      <Accordion>
+      <Accordion defaultActiveId="p1">
         {pagedProducts.map((product) => (
           <Accordion.Item key={product.id} id={product.id}>
             <Accordion.Header>
-              {product.name} - {product.price.toLocaleString("vi-VN")} đ
+              {product.name} — {product.price.toLocaleString("vi-VN")} đ
             </Accordion.Header>
             <Accordion.Body>
               <p><strong>Danh mục:</strong> {product.category}</p>
-              <p><strong>Mô tả chi tiết:</strong> {product.description}</p>
+              <p><strong>Mô tả:</strong> {product.description}</p>
             </Accordion.Body>
           </Accordion.Item>
         ))}
       </Accordion>
 
-      {/* Điều khiển phân trang */}
-      <div style={{ display: "flex", gap: "8px", marginTop: "16px", alignItems: "center", justifyContent: "center" }}>
-        <button onClick={prevPage} disabled={!canPrevPage} style={{ padding: "6px 12px" }}>
-          Trang trước
+      {/* Điều khiển Pagination */}
+      <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "center", alignItems: "center" }}>
+        <button
+          type="button"
+          onClick={prevPage}
+          disabled={!canPrevPage}
+          style={{ padding: "6px 12px", cursor: canPrevPage ? "pointer" : "not-allowed" }}
+        >
+          Trước
         </button>
 
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
           <button
             key={page}
+            type="button"
             onClick={() => goToPage(page)}
             style={{
               padding: "6px 12px",
-              fontWeight: currentPage === page ? "bold" : "normal",
-              backgroundColor: currentPage === page ? "#3b82f6" : "#f1f5f9",
-              color: currentPage === page ? "#fff" : "#000",
-              border: "1px solid #cbd5e1",
               cursor: "pointer",
+              fontWeight: currentPage === page ? "bold" : "normal",
+              backgroundColor: currentPage === page ? "#2563eb" : "#f1f5f9",
+              color: currentPage === page ? "#ffffff" : "#0f172a",
+              border: "1px solid #cbd5e1",
+              borderRadius: "4px",
             }}
           >
             {page}
           </button>
         ))}
 
-        <button onClick={nextPage} disabled={!canNextPage} style={{ padding: "6px 12px" }}>
-          Trang sau
+        <button
+          type="button"
+          onClick={nextPage}
+          disabled={!canNextPage}
+          style={{ padding: "6px 12px", cursor: canNextPage ? "pointer" : "not-allowed" }}
+        >
+          Sau
         </button>
       </div>
     </div>
   );
-};
+}
