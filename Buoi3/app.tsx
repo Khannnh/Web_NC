@@ -2,7 +2,7 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { store } from './BTVN/app/store';
 import { ProductList } from './BTVN/features/products/ProductList';
-import { CartSummary } from './BTVN/features/cart/cartSummary';
+import { CartSummary } from './BTVN/features/cart/CartSummary';
 
 export default function App() {
   return (
