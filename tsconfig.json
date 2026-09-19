@@ -8,6 +8,7 @@
     "jsx": "react-jsx", //thêm dòng này nếu có file tsx
     "experimentalDecorators": true,
     "strict": true,
+    "strictNullChecks": true,//để check lỗi kiểu type 
     "skipLibCheck": true,
     "sourceMap": false,
     "declaration": false,
